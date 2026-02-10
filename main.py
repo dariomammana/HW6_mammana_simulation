@@ -25,17 +25,58 @@ class Lifeform:
     def move(self, map):
         x_offset =random.randint(-1, 1)
         y_offset =random.randint(-1, 1)
-        new_x = self.location.x+x_offset
-        new_y = self.location.y+y_offset
-        if 0<new_x and new_x < len(map.cells) and 0<new_y and new_y < len(map.cells):
-            if not map.cells[new_x][new_y].inhabitant:
-                self.location.inhabitant = None
-                self.location = map.cells[new_x][new_y]
-                map.cells[new_x][new_y].inhabitant = self
+        new_x = (self.location.x+x_offset) % (len(map.cells))
+        new_y = (self.location.y+y_offset) % (len(map.cells))
+        if not map.cells[new_x][new_y].inhabitant:
+            self.location.inhabitant = None
+            self.location = map.cells[new_x][new_y]
+            map.cells[new_x][new_y].inhabitant = self
+    
+    def eat(self, map):
+        """
+        Docstring for eat
+        INSERT BEHAVIOR HERE
+        """
+        pass
+
+    def reproduce(self, map):
+        """
+        Docstring for reproduce
+        INSERT BEHAVIOR HERE
+        """
+        pass
+
+    def die(self, map):
+        """
+        Docstring for die
+        INSERT BEHAVIOR HERE
+        """
+        pass
             
     
     def render(self):
         return(self.symbol)
+    
+class Grass(Lifeform):
+    """
+    Docstring for Grass
+    INSERT BEHAVIOR HERE
+    """
+    pass
+
+class Sheep(Lifeform):
+    """
+    Docstring for Sheep
+    INSERT BEHAVIOR HERE
+    """
+    pass
+
+class Wolf(Lifeform):
+    """
+    Docstring for Wolf
+    INSERT BEHAVIOR HERE
+    """
+    pass
 
 class Map:
     
