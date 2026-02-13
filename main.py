@@ -62,7 +62,29 @@ class Grass(Lifeform):
     Docstring for Grass
     INSERT BEHAVIOR HERE
     """
-    pass
+    def __init__(self):
+        super().__init__(location=None)
+        self.symbol = "\x1b[48;2;34;139;34m \x1b[0m" # Green background for grass
+
+    def act(self, map):
+        return
+
+    @classmethod
+    def grow(cls, map, p_g=0.05):
+        for i in range(0, map.size):
+            for j in range(0, map.size):
+                cell = map.cells[i][j]
+                if cell.inhabitant is None and cell.state == ".":
+                    if random.random() < p_g:
+                        cell.state = cls().render()
+
+    @classmethod
+    def consume(cls, map):
+        for i in range(0, map.size):
+            for j in range(0, map.size):
+                cell = map.cells[i][j]
+                if isinstance(cell.inhabitant, Sheep) and cell.state != ".":
+                    cell.state = "."
 
 class Sheep(Lifeform):
     """
@@ -112,7 +134,7 @@ class Cell:
 
 class Simulation:
     
-    def __init__(self, timestep = 0.125, iterations = 3, map_size = 10,lifeform_count = 5):
+    def __init__(self, timestep = 0.125, iterations = 3, map_size = 10,lifeform_count = 5, grass_growth_rate = 0.05):
         self._dynamic_terminal = DynamicTerminal(map_size+2)
         self.max_iter = iterations
         self.time_step = timestep
@@ -122,9 +144,11 @@ class Simulation:
         self.map_size = map_size
         self.map = Map(map_size)
         self.lifeforms = list()
+        self.grass_growth_rate = grass_growth_rate 
         self.setup()
         
     def setup(self):
+        Grass.grow(self.map, self.grass_growth_rate)
         for i in range(0,self.lifeform_count):
             x = random.randint(0, self.map_size-1) 
             y = random.randint(0, self.map_size-1)
@@ -144,6 +168,8 @@ class Simulation:
             
     def update(self):
         time.sleep(self.time_step)
+        Grass.grow(self.map, self.grass_growth_rate)
+        Grass.consume(self.map)
         for lifeform in self.lifeforms:
             lifeform.act(self.map)
     
@@ -178,6 +204,6 @@ class DynamicTerminal:
         self.rewrite_lines(text)
         
 if __name__ == "__main__":
-    sim = Simulation(iterations=50,map_size = 30,lifeform_count = 50)
+    sim = Simulation(iterations=20,map_size = 30,lifeform_count = 50)
     while(not sim.terminated):
         sim.step()
