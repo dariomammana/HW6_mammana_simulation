@@ -90,8 +90,10 @@ class Grass(Lifeform):
 
 class Sheep(Lifeform):
     """
-    Docstring for Sheep
-    INSERT BEHAVIOR HERE
+    Sheep is a lifeform represented by a white 'S' in the terminal.
+    Each turn, sheep ages and loses energy for moving.
+    Each turn, sheep moves to a random adjacent cell (up, down, left, right).
+    If there's grass in the current cell, the sheep eats it and gains energy.
     """
     def __init__(
         self,
@@ -179,10 +181,96 @@ class Sheep(Lifeform):
 
 class Wolf(Lifeform):
     """
-    Docstring for Wolf
-    INSERT BEHAVIOR HERE
+    Wolf is a predator represented by a red 'W'.
+    It moves randomly, eats sheep, reproduces with enough energy,
+    and can die from starvation, old age, or random chance.
     """
-    pass
+    def __init__(
+        self,
+        location=None,
+        e_wolf_init=14,
+        e_sheep=8,
+        e_move=1,
+        e_wolf_reproduce=18,
+        max_age=40,
+        death_chance=0.02,
+    ):
+        super().__init__(location=location)
+        self.symbol = "\x1b[38;2;255;0;0mW\x1b[0m" # Red 'W' for wolf
+        self.energy = e_wolf_init
+        self.e_sheep = e_sheep
+        self.e_move = e_move
+        self.e_wolf_reproduce = e_wolf_reproduce
+        self.max_age = max_age
+        self.death_chance = death_chance
+        self.age = 0
+
+    def act(self, map, lifeforms=None):
+        '''each step it:
+        ages,
+        loses energy for moving,
+        moves,
+        eats sheep if present,
+        reproduces if energy is high enough,
+        dies if energy is zero or age is maxed or random chance'''
+        if self.location is None:
+            return
+        self.age += 1
+        self.energy -= self.e_move
+        self.move(map, lifeforms)
+        if self.energy >= self.e_wolf_reproduce:
+            self.reproduce(map, lifeforms)
+        if self.energy <= 0 or self.age >= self.max_age or random.random() < self.death_chance:
+            self.die(map, lifeforms)
+
+    def move(self, map, lifeforms):
+        moves = [(-1, 0), (0, -1), (0, 1), (1, 0)]
+        x_move, y_move = random.choice(moves)
+        new_x = (self.location.x + x_move) % (len(map.cells))
+        new_y = (self.location.y + y_move) % (len(map.cells))
+        target = map.cells[new_x][new_y]
+        if isinstance(target.inhabitant, Sheep): # If there's a sheep in the target cell, eat it and gain energy
+            prey = target.inhabitant
+            if lifeforms and prey in lifeforms:
+                lifeforms.remove(prey)
+            target.inhabitant = None
+            self.energy += self.e_sheep
+        if target.inhabitant is None: 
+            self.location.inhabitant = None # Move out of current cell
+            self.location = target
+            target.inhabitant = self # Move into target cell
+
+    def reproduce(self, map, lifeforms):
+        if not lifeforms or not self.location:
+            return
+        moves = [(-1, 0), (0, -1), (0, 1), (1, 0)]
+        random.shuffle(moves)
+        for x_move, y_move in moves:
+            new_x = (self.location.x + x_move) % (len(map.cells))
+            new_y = (self.location.y + y_move) % (len(map.cells))
+            target = map.cells[new_x][new_y]
+            if target.inhabitant is None:
+                child_energy = self.energy // 2
+                self.energy -= child_energy
+                pup = Wolf(
+                    location=target,
+                    e_wolf_init=child_energy,
+                    e_sheep=self.e_sheep,
+                    e_move=self.e_move,
+                    e_wolf_reproduce=self.e_wolf_reproduce,
+                    max_age=self.max_age,
+                    death_chance=self.death_chance,
+                )
+                target.inhabitant = pup
+                lifeforms.append(pup)
+                break # Only reproduce once per turn
+
+    def die(self, map, lifeforms):
+        if self.location:
+            self.location.inhabitant = None
+            self.location = None
+        if lifeforms and self in lifeforms:
+            lifeforms.remove(self)
 
 class Map:
     
@@ -218,27 +306,40 @@ class Cell:
 
 class Simulation:
     
-    def __init__(self, timestep = 0.125, iterations = 3, map_size = 10,lifeform_count = 5, grass_growth_rate = 0.05):
+    def __init__(self, timestep = 0.125, iterations = 3, map_size = 10,sheep_count = 5, grass_growth_rate = 0.05, wolf_count = 10):
         self._dynamic_terminal = DynamicTerminal(map_size+2)
         self.max_iter = iterations
         self.time_step = timestep
         self.current_iter = 0
         self.terminated = False
-        self.lifeform_count = lifeform_count
+        self.sheep_count = sheep_count
+        self.wolf_count = wolf_count
         self.map_size = map_size
         self.map = Map(map_size)
         self.lifeforms = list()
         self.grass_growth_rate = grass_growth_rate 
         self.setup()
         
-    def setup(self):
+    def setup(self): 
         Grass.grow(self.map, self.grass_growth_rate)
-        for i in range(0,self.lifeform_count):
+        for i in range(0,self.sheep_count):
             x = random.randint(0, self.map_size-1) 
             y = random.randint(0, self.map_size-1)
+            while self.map.cells[x][y].inhabitant is not None: # Ensure we place the sheep in an empty cell
+                x = random.randint(0, self.map_size-1)
+                y = random.randint(0, self.map_size-1)
             new_life = Sheep(self.map.cells[x][y]) # Place a new sheep and not a generic lifeform.
             self.lifeforms.append(new_life)
             self.map.cells[x][y].inhabitant = new_life
+        for i in range(0, self.wolf_count):
+            x = random.randint(0, self.map_size-1)
+            y = random.randint(0, self.map_size-1)
+            while self.map.cells[x][y].inhabitant is not None: # Ensure we place the wolf in an empty cell
+                x = random.randint(0, self.map_size-1)
+                y = random.randint(0, self.map_size-1)
+            new_wolf = Wolf(self.map.cells[x][y])
+            self.lifeforms.append(new_wolf)
+            self.map.cells[x][y].inhabitant = new_wolf
         
         
     def step(self):
@@ -288,6 +389,6 @@ class DynamicTerminal:
         self.rewrite_lines(text)
         
 if __name__ == "__main__":
-    sim = Simulation(iterations=20,map_size = 30,lifeform_count = 50)
+    sim = Simulation(iterations=20,map_size = 30,sheep_count = 50)
     while(not sim.terminated):
         sim.step()
