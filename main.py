@@ -6,11 +6,12 @@ import random
 import sys    
 import time   
 import os
+from abc import ABC, abstractmethod
 
 if os.name == 'nt':
     os.system('color')
 
-class Lifeform:
+class Lifeform(ABC):
     
     def __init__(self, location = None):
         self.location = location
@@ -19,43 +20,35 @@ class Lifeform:
         self._b = random.randint(0,255)
         self.symbol = f"\x1b[38;2;{self._r};{self._g};{self._b}m{random.choice(string.ascii_letters)}\x1b[0m"
         
-    def act(self, map):
-        self.move(map)
+    @abstractmethod
+    def act(self, map, lifeforms=None):
+        """Perform one timestep of behavior for this lifeform."""
+        pass
     
-    def move(self, map):
-        x_offset =random.randint(-1, 1)
-        y_offset =random.randint(-1, 1)
-        new_x = (self.location.x+x_offset) % (len(map.cells))
-        new_y = (self.location.y+y_offset) % (len(map.cells))
-        if not map.cells[new_x][new_y].inhabitant:
-            self.location.inhabitant = None
-            self.location = map.cells[new_x][new_y]
-            map.cells[new_x][new_y].inhabitant = self
+    @abstractmethod
+    def move(self, map, lifeforms=None):
+        """Move the lifeform to a new location if applicable."""
+        pass
     
-    def eat(self, map):
-        """
-        Docstring for eat
-        INSERT BEHAVIOR HERE
-        """
+    @abstractmethod
+    def eat(self, map, lifeforms=None):
+        """Consume resources or other lifeforms if applicable."""
         pass
 
-    def reproduce(self, map):
-        """
-        Docstring for reproduce
-        INSERT BEHAVIOR HERE
-        """
+    @abstractmethod
+    def reproduce(self, map, lifeforms=None):
+        """Create offspring if conditions are met."""
         pass
 
-    def die(self, map):
-        """
-        Docstring for die
-        INSERT BEHAVIOR HERE
-        """
+    @abstractmethod
+    def die(self, map, lifeforms=None):
+        """Remove the lifeform from the simulation if needed."""
         pass
             
     
     def render(self):
-        return(self.symbol)
+        """Return the display symbol for this lifeform."""
+        return self.symbol
     
 class Grass(Lifeform):
     """
@@ -69,6 +62,19 @@ class Grass(Lifeform):
         self.symbol = "\x1b[48;2;34;139;34m \x1b[0m" # Green background for grass
 
     def act(self, map):
+        return
+
+# Grass does not move, eat, reproduce, or die
+    def move(self, map, lifeforms=None):
+        return
+
+    def eat(self, map, lifeforms=None):
+        return
+
+    def reproduce(self, map, lifeforms=None):
+        return
+
+    def die(self, map, lifeforms=None):
         return
 
     @classmethod
@@ -132,7 +138,7 @@ class Sheep(Lifeform):
         if self.energy <= 0 or self.age >= self.max_age:
             self.die(map, lifeforms)
 
-    def move(self, map):
+    def move(self, map, lifeforms=None):
         moves = [(-1, 0), (0, -1), (0, 1), (1, 0)] # Up, Left, Right, Down
         x_move, y_move = random.choice(moves)
         new_x = (self.location.x + x_move) % (len(map.cells)) 
@@ -204,6 +210,7 @@ class Wolf(Lifeform):
         self.max_age = max_age
         self.death_chance = death_chance
         self.age = 0
+        self._last_prey = None
 
     def act(self, map, lifeforms=None):
         '''each step it:
@@ -218,10 +225,21 @@ class Wolf(Lifeform):
         self.age += 1
         self.energy -= self.e_move
         self.move(map, lifeforms)
+        self.eat(map, lifeforms)
         if self.energy >= self.e_wolf_reproduce:
             self.reproduce(map, lifeforms)
         if self.energy <= 0 or self.age >= self.max_age or random.random() < self.death_chance:
             self.die(map, lifeforms)
+
+    def eat(self, map, lifeforms=None):
+        if not self._last_prey:
+            return
+        prey = self._last_prey
+        if lifeforms and prey in lifeforms:
+            lifeforms.remove(prey)
+        prey.location = None
+        self.energy += self.e_sheep
+        self._last_prey = None
 
     def move(self, map, lifeforms):
         moves = [(-1, 0), (0, -1), (0, 1), (1, 0)]
@@ -229,13 +247,9 @@ class Wolf(Lifeform):
         new_x = (self.location.x + x_move) % (len(map.cells))
         new_y = (self.location.y + y_move) % (len(map.cells))
         target = map.cells[new_x][new_y]
-        if isinstance(target.inhabitant, Sheep): # If there's a sheep in the target cell, eat it and gain energy
-            prey = target.inhabitant
-            if lifeforms and prey in lifeforms:
-                lifeforms.remove(prey)
-            target.inhabitant = None
-            self.energy += self.e_sheep
-        if target.inhabitant is None: 
+        if isinstance(target.inhabitant, Sheep): # If the target cell has a sheep, eat it
+            self._last_prey = target.inhabitant
+        if target.inhabitant is None or isinstance(target.inhabitant, Sheep): 
             self.location.inhabitant = None # Move out of current cell
             self.location = target
             target.inhabitant = self # Move into target cell
@@ -389,6 +403,6 @@ class DynamicTerminal:
         self.rewrite_lines(text)
         
 if __name__ == "__main__":
-    sim = Simulation(iterations=20,map_size = 30,sheep_count = 50)
+    sim = Simulation(iterations=20,map_size = 30,sheep_count = 40,wolf_count = 20, grass_growth_rate=0.05)
     while(not sim.terminated):
         sim.step()
